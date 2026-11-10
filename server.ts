@@ -10,7 +10,15 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  
+  // Parse port from CLI flags (--port <num>) or env, strictly defaulting to 3000
+  let PORT = 3000;
+  const portArgIdx = process.argv.indexOf('--port');
+  if (portArgIdx !== -1 && process.argv[portArgIdx + 1]) {
+    PORT = parseInt(process.argv[portArgIdx + 1], 10);
+  } else if (process.env.PORT && process.env.NODE_ENV === 'production') {
+    PORT = parseInt(process.env.PORT, 10);
+  }
   const isProd = process.env.NODE_ENV === 'production';
 
   app.use(express.json());

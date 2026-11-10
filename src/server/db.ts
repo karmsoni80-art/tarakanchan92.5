@@ -1,27 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { Product, Category, Coupon, Order, User, Review, Address } from '../types';
-
-export interface CategoryInfo {
-  id: string;
-  name: string;
-  slug: string;
-  image: string;
-  itemCount: number;
-  tagline: string;
-}
-
-export interface StoreSettings {
-  announcementText: string;
-  silverRateToday: string;
-  freeShippingThreshold: number;
-  razorpayKeyId: string;
-  razorpayTestMode: boolean;
-  contactEmail: string;
-  contactPhone: string;
-  whatsappNumber: string;
-  showroomAddress: string;
-}
+import { Product, Category, CategoryInfo, StoreSettings, Coupon, Order, User, Review, Address } from '../types';
 
 export interface DatabaseSchema {
   products: Product[];

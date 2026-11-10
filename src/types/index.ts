@@ -8,6 +8,29 @@ export type ProductCategory =
   | 'Chains'
   | 'Gift Sets';
 
+export type Category = ProductCategory;
+
+export interface CategoryInfo {
+  id: string;
+  name: string;
+  slug: string;
+  image: string;
+  itemCount: number;
+  tagline: string;
+}
+
+export interface StoreSettings {
+  announcementText: string;
+  silverRateToday: string;
+  freeShippingThreshold: number;
+  razorpayKeyId: string;
+  razorpayTestMode: boolean;
+  contactEmail: string;
+  contactPhone: string;
+  whatsappNumber: string;
+  showroomAddress: string;
+}
+
 export type CollectionType = 
   | 'All'
   | 'Bridal Collection'
