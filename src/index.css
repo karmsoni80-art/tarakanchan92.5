@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-sans: "Poppins", system-ui, -apple-system, sans-serif;
+  --color-brand-primary: #6F4C57;
+  --color-brand-dark: #3E2630;
+  --color-brand-button: #B76E79;
+  --color-brand-hover: #C8A4A6;
+  --color-brand-gold: #D4AF37;
+  --color-brand-cream: #FFF9F5;
+  --color-brand-rose: #E8C7CC;
+  --color-brand-text: #F8F1F1;
+  --color-brand-darktext: #34252C;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #3E2630;
+  color: #F8F1F1;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, .font-playfair {
+  font-family: var(--font-serif);
+}
+
+/* Custom luxury scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #3E2630;
+}
+::-webkit-scrollbar-thumb {
+  background: #6F4C57;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B76E79;
+}
+
+/* Gold shimmer shimmer effect */
+@keyframes shimmerGold {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.gold-shimmer {
+  background: linear-gradient(90deg, #D4AF37 0%, #FFF3B0 50%, #D4AF37 100%);
+  background-size: 200% 100%;
+  animation: shimmerGold 4s infinite linear;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}

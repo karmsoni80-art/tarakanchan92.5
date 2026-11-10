@@ -1,0 +1,1194 @@
+import fs from 'fs';
+import path from 'path';
+import { Product, Category, Coupon, Order, User, Review, Address } from '../types';
+
+export interface CategoryInfo {
+  id: string;
+  name: string;
+  slug: string;
+  image: string;
+  itemCount: number;
+  tagline: string;
+}
+
+export interface StoreSettings {
+  announcementText: string;
+  silverRateToday: string;
+  freeShippingThreshold: number;
+  razorpayKeyId: string;
+  razorpayTestMode: boolean;
+  contactEmail: string;
+  contactPhone: string;
+  whatsappNumber: string;
+  showroomAddress: string;
+}
+
+export interface DatabaseSchema {
+  products: Product[];
+  categories: CategoryInfo[];
+  coupons: Coupon[];
+  users: User[];
+  orders: Order[];
+  reviews: Review[];
+  carts: Record<string, any[]>; // userId/sessionId -> CartItem[]
+  wishlists: Record<string, string[]>; // userId/sessionId -> productId[]
+  newsletterSubscribers: { email: string; subscribedAt: string; discountCode: string }[];
+  settings: StoreSettings;
+}
+
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const DB_FILE = path.join(DATA_DIR, 'database.json');
+
+const INITIAL_PRODUCTS: Product[] = [
+  {
+    id: 'prod-ring-01',
+    name: 'Regal Maharani Kundan 92.5 Silver Ring',
+    sku: 'TK-RNG-925-01',
+    category: 'Rings',
+    collection: ['Bridal Collection', 'Festive Collection'],
+    originalPrice: 4899,
+    sellingPrice: 3499,
+    discount: 29,
+    rating: 4.9,
+    reviewCount: 42,
+    images: [
+      'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Mastercrafted in solid 92.5 sterling silver with royal polki accents, encased in delicate micro-prongs. An heirloom cocktail ring designed for weddings and grand celebrations.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 8.4,
+    sizes: ['Size 12', 'Size 14', 'Size 16', 'Size 18', 'Adjustable'],
+    inStock: true,
+    stockCount: 18,
+    isBestSeller: true,
+    isFeatured: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Laser Stamped with Authenticity Card',
+      plating: 'Rhodium & Antique Micron Gold Accent',
+      gemstone: 'Hand-set AAA Cubic Zirconia & Kundan Foil',
+      dimensions: 'Crown diameter 22mm',
+      warranty: 'Lifetime Authenticity Certificate & Free Polishing',
+    },
+    features: ['BIS 925 Certified', 'Hypoallergenic & Lead Free', 'Anti-Tarnish Rhodium Shield', 'Includes Luxury Velvet Gifting Box'],
+  },
+  {
+    id: 'prod-ring-02',
+    name: 'Eternal Solitaire Pavé Sterling Band',
+    sku: 'TK-RNG-925-02',
+    category: 'Rings',
+    collection: ['Everyday Designs', 'Valentines Special'],
+    originalPrice: 3299,
+    sellingPrice: 2299,
+    discount: 30,
+    rating: 4.8,
+    reviewCount: 67,
+    images: [
+      'https://images.unsplash.com/photo-1603561591411-07134e71a2a9?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'A dazzling 1.5 carat equivalent brilliant-cut center stone bordered by micro-pavé hand-set gems on a lustrous pure 92.5 silver shank. Elegant minimalism for modern daily wear.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 4.2,
+    sizes: ['Size 10', 'Size 12', 'Size 14', 'Size 16'],
+    inStock: true,
+    stockCount: 25,
+    isBestSeller: true,
+    isNewArrival: false,
+    specifications: {
+      metal: '92.5 Pure Sterling Silver',
+      hallmark: 'BIS 925 Stamped',
+      plating: 'High-Lustre White Rhodium',
+      gemstone: 'Hearts & Arrows Cut Cubic Zirconia',
+      dimensions: 'Band width 2.2mm, Center stone 7mm',
+      warranty: '1 Year Warranty + Lifetime Metal Guarantee',
+    },
+    features: ['Everyday Wear Resistant', 'Comfort-Fit Inner Edge', 'Includes Authenticity Certificate'],
+  },
+  {
+    id: 'prod-earring-01',
+    name: 'Chandrika Peacock Silver Jhumkas',
+    sku: 'TK-EAR-925-01',
+    category: 'Earrings',
+    collection: ['Bridal Collection', 'Festive Collection', 'Diwali Collection'],
+    originalPrice: 5999,
+    sellingPrice: 4299,
+    discount: 28,
+    rating: 5.0,
+    reviewCount: 39,
+    images: [
+      'https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1635767798638-3e25273a8236?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Intricately filigreed royal peacock motif jhumkas in solid 92.5 silver featuring tiny musical pearl ghungroos. Crafted by national award-winning silver artisans of Rajasthan.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 16.5,
+    sizes: ['Standard Drop (48mm)'],
+    inStock: true,
+    stockCount: 12,
+    isBestSeller: true,
+    isFeatured: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Hallmark Verified',
+      plating: 'Oxidised Antique Vintage Silver Finish',
+      gemstone: 'Seed Pearls & Synthetic Rubies',
+      claspType: 'Push Back with Silver Safety Clutch',
+      dimensions: 'Length 48mm, Width 22mm',
+      warranty: 'Lifetime Authenticity Certificate',
+    },
+    features: ['Handcrafted Filigree Work', 'Lightweight Hollow Bell Design', 'Skin Safe Anti-Allergic'],
+  },
+  {
+    id: 'prod-earring-02',
+    name: 'Luminescent Teardrop Zirconia Dangles',
+    sku: 'TK-EAR-925-02',
+    category: 'Earrings',
+    collection: ['Everyday Designs', 'New Arrivals'],
+    originalPrice: 2799,
+    sellingPrice: 1999,
+    discount: 29,
+    rating: 4.7,
+    reviewCount: 28,
+    images: [
+      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Slender cascading sterling silver silhouettes crowned with pear-cut cubic zirconia crystals that capture candlelight and ambient glow.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 5.6,
+    sizes: ['Drop 32mm'],
+    inStock: true,
+    stockCount: 30,
+    isNewArrival: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: '925 Laser Inscription',
+      plating: 'Mirror Finish Rhodium',
+      gemstone: 'Swiss Grade Zirconia',
+      claspType: 'Lever Back Closure',
+      dimensions: 'Length 32mm',
+      warranty: '1 Year Warranty',
+    },
+    features: ['Ultra Lightweight', 'High Reflectivity', 'Non-Tarnish Coating'],
+  },
+  {
+    id: 'prod-neck-01',
+    name: 'Aadhya Royal Polki Choker Necklace',
+    sku: 'TK-NCK-925-01',
+    category: 'Necklaces',
+    collection: ['Bridal Collection', 'Festive Collection'],
+    originalPrice: 16999,
+    sellingPrice: 12499,
+    discount: 26,
+    rating: 4.9,
+    reviewCount: 51,
+    images: [
+      'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1611591475152-473549298711?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'The epitome of regal Indian grandeur. A choker necklace handcrafted in 92.5 silver with uncut Polki crystals, emerald-green droplits, and an adjustable heritage woven zari cord.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 42.0,
+    sizes: ['Adjustable Choker Fit with Silk Cord'],
+    inStock: true,
+    stockCount: 8,
+    isBestSeller: true,
+    isFeatured: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Seal on Clasp & Frame',
+      plating: '24K Micron Gold Plated over 925 Silver',
+      gemstone: 'Hand-Cut Glass Polki & Hydro Emerald Beads',
+      claspType: 'Traditional Adjustable Dori',
+      dimensions: 'Choker band width 28mm',
+      warranty: 'Lifetime Authenticity Certificate & Re-polishing Support',
+    },
+    features: ['Museum Grade Heritage Replica', 'Heavy Gold Foil Encasing', 'Handmade Certificate Included'],
+  },
+  {
+    id: 'prod-neck-02',
+    name: 'Eternity Tennis Rivière Silver Collar',
+    sku: 'TK-NCK-925-02',
+    category: 'Necklaces',
+    collection: ['Everyday Designs', 'New Arrivals', 'Luxury Gifting'],
+    originalPrice: 8999,
+    sellingPrice: 6499,
+    discount: 28,
+    rating: 4.9,
+    reviewCount: 34,
+    images: [
+      'https://images.unsplash.com/photo-1611591475152-473549298711?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'A seamless, continuous stream of prong-set round cut crystals wrapping the collarbone in pure 92.5 sterling silver. Finished with a double-safety box clasp.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 18.5,
+    sizes: ['16 inch', '18 inch'],
+    inStock: true,
+    stockCount: 15,
+    isNewArrival: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Stamped on Box Lock',
+      plating: 'Platinum / Rhodium Triple Dip',
+      gemstone: 'AAA+ Cubic Zirconia (4mm stones)',
+      claspType: 'Double Security Box Clasp',
+      dimensions: 'Length 40cm / 45cm',
+      warranty: '2 Year Warranty against stone loosening',
+    },
+    features: ['Red Carpet Statement Piece', 'Flexible Articulated Links', 'Won’t Flip on Neck'],
+  },
+  {
+    id: 'prod-brac-01',
+    name: 'Royal Mayura Embossed Silver Kada',
+    sku: 'TK-BRC-925-01',
+    category: 'Bracelets',
+    collection: ['Bridal Collection', 'Festive Collection'],
+    originalPrice: 7499,
+    sellingPrice: 5299,
+    discount: 29,
+    rating: 5.0,
+    reviewCount: 29,
+    images: [
+      'https://images.unsplash.com/photo-1611591475152-473549298711?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Substantial, solid 92.5 sterling silver openable kada featuring sculpted lion and peacock finials, deeply engraved with temple motifs.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 28.2,
+    sizes: ['2.4 (Small)', '2.6 (Medium)', '2.8 (Large)'],
+    inStock: true,
+    stockCount: 14,
+    isBestSeller: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Hallmark Inner Wall',
+      plating: 'Vintage Oxidised Polish',
+      claspType: 'Screw-lock Hinge Opening',
+      warranty: 'Lifetime Authenticity Guarantee',
+    },
+    features: ['Solid Hallmarked Core', 'Easy Screw Lock', 'Traditional Nakshi Engraving'],
+  },
+  {
+    id: 'prod-brac-02',
+    name: 'Constellation Zirconia Tennis Bracelet',
+    sku: 'TK-BRC-925-02',
+    category: 'Bracelets',
+    collection: ['Everyday Designs', 'Valentines Special'],
+    originalPrice: 4299,
+    sellingPrice: 2999,
+    discount: 30,
+    rating: 4.8,
+    reviewCount: 44,
+    images: [
+      'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Pure liquid sparkle for your wrist. Crafted in lightweight 92.5 sterling silver with individually prong-set stones and an extender chain.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 9.1,
+    sizes: ['6.5 inch + 1.5 inch extender'],
+    inStock: true,
+    stockCount: 22,
+    isTrending: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Stamped Clasp',
+      plating: 'Anti-Tarnish Rhodium',
+      gemstone: 'Cubic Zirconia',
+      claspType: 'Lobster Claw with Extender',
+      warranty: '1 Year Warranty',
+    },
+    features: ['Adjustable Fit', 'Everyday Glamour', 'Gentle on Knitwear'],
+  },
+  {
+    id: 'prod-ank-01',
+    name: 'Noopur Ghungroo Bridal Silver Payal',
+    sku: 'TK-ANK-925-01',
+    category: 'Anklets',
+    collection: ['Bridal Collection', 'Festive Collection'],
+    originalPrice: 6899,
+    sellingPrice: 4899,
+    discount: 29,
+    rating: 4.9,
+    reviewCount: 31,
+    images: [
+      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Pair of traditional Indian bridal payals crafted in hallmarked 92.5 silver with sweet melodic ghungroos that produce a soft, auspicious chime.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 36.4,
+    sizes: ['10 inch (Standard Pair)', '10.5 inch (Extended Pair)'],
+    inStock: true,
+    stockCount: 10,
+    isFeatured: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Stamp',
+      plating: 'Bright Sterling Polish with Enamel Inlays',
+      claspType: 'Traditional S-Hook Clasp',
+      warranty: 'Lifetime Authenticity Certificate',
+    },
+    features: ['Sold as a Pair (2 pcs)', 'Sweet Resonant Sound', 'Sturdy Hand-linked Loops'],
+  },
+  {
+    id: 'prod-ank-02',
+    name: 'Dewdrop Charm Minimalist Silver Anklet',
+    sku: 'TK-ANK-925-02',
+    category: 'Anklets',
+    collection: ['Everyday Designs', 'New Arrivals'],
+    originalPrice: 1999,
+    sellingPrice: 1399,
+    discount: 30,
+    rating: 4.8,
+    reviewCount: 22,
+    images: [
+      'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'A dainty single-chain ankle bracelet with shimmering water-drop beads in pure 92.5 silver. Designed for modern western outfits and beach vacays.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 4.5,
+    sizes: ['9.5 inch + 1 inch extender'],
+    inStock: true,
+    stockCount: 40,
+    isNewArrival: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: '925 Tag',
+      plating: 'Rhodium Coat',
+      claspType: 'Spring Ring Clasp',
+      warranty: '1 Year Warranty',
+    },
+    features: ['Snag-Free Design', 'Water-Resistant Coating', 'Dainty Everyday Look'],
+  },
+  {
+    id: 'prod-pend-01',
+    name: 'Sacred Mandala Tree of Life Silver Pendant',
+    sku: 'TK-PND-925-01',
+    category: 'Pendants',
+    collection: ['Everyday Designs', 'Luxury Gifting'],
+    originalPrice: 3499,
+    sellingPrice: 2499,
+    discount: 29,
+    rating: 5.0,
+    reviewCount: 47,
+    images: [
+      'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'An auspicious mandala medallion sculpted in pure 92.5 silver representing growth, family roots, and eternal protection. Includes an Italian pure silver chain.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 7.8,
+    sizes: ['Includes 18 inch Sterling Silver Chain'],
+    inStock: true,
+    stockCount: 28,
+    isBestSeller: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Hallmark on Bale & Chain',
+      plating: 'High-Polish Rhodium',
+      dimensions: 'Diameter 24mm',
+      warranty: 'Lifetime Authenticity Certificate',
+    },
+    features: ['Includes Free 925 Silver Chain', 'Bespoke Engraving Ready', 'Luxury Velvet Presentation Box'],
+  },
+  {
+    id: 'prod-pend-02',
+    name: 'Prism Solitaire Drop Silver Pendant',
+    sku: 'TK-PND-925-02',
+    category: 'Pendants',
+    collection: ['Everyday Designs', 'Valentines Special'],
+    originalPrice: 2499,
+    sellingPrice: 1799,
+    discount: 28,
+    rating: 4.8,
+    reviewCount: 33,
+    images: [
+      'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'A solitaire cushion-cut stone suspended inside a double-halo basket in 92.5 sterling silver with a complimentary fine box chain.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 5.2,
+    sizes: ['Includes 16 inch + 2 inch chain'],
+    inStock: true,
+    stockCount: 35,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Stamped',
+      plating: 'Rhodium Shield',
+      gemstone: 'Cubic Zirconia',
+      warranty: '1 Year Warranty',
+    },
+    features: ['Timeless Solitaire', 'Gift Ready', 'Hypoallergenic'],
+  },
+  {
+    id: 'prod-chain-01',
+    name: 'Italian Figaro Diamond-Cut 92.5 Silver Chain',
+    sku: 'TK-CHN-925-01',
+    category: 'Chains',
+    collection: ['Everyday Designs', 'New Arrivals'],
+    originalPrice: 3999,
+    sellingPrice: 2799,
+    discount: 30,
+    rating: 4.9,
+    reviewCount: 52,
+    images: [
+      'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1611591475152-473549298711?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Precision diamond-cut Italian Figaro links in solid 92.5 silver that shimmer with every turn. Strong enough for pendants or worn solo.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 12.5,
+    sizes: ['18 inch', '20 inch', '22 inch', '24 inch'],
+    inStock: true,
+    stockCount: 20,
+    isTrending: true,
+    specifications: {
+      metal: '92.5 Sterling Silver (Made in Italy)',
+      hallmark: '925 ITALY Stamped on End Cap',
+      plating: 'Anti-Oxidation Coating',
+      claspType: 'Heavy-Duty Lobster Clasp',
+      dimensions: 'Link gauge 3.5mm',
+      warranty: 'Lifetime Silver Quality Certificate',
+    },
+    features: ['Unisex Luxury Design', 'Diamond-Cut Facets', 'Tangle-Resistant'],
+  },
+  {
+    id: 'prod-chain-02',
+    name: 'Rope Link Venetian Silver Chain',
+    sku: 'TK-CHN-925-02',
+    category: 'Chains',
+    collection: ['Everyday Designs'],
+    originalPrice: 3299,
+    sellingPrice: 2399,
+    discount: 27,
+    rating: 4.8,
+    reviewCount: 38,
+    images: [
+      'https://images.unsplash.com/photo-1611591475152-473549298711?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Spiraled rope texture crafted with meticulous density in 92.5 sterling silver, providing rich tactile weight and lasting shine.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 9.8,
+    sizes: ['18 inch', '20 inch'],
+    inStock: true,
+    stockCount: 16,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: '925 Stamp',
+      plating: 'High-Polish Rhodium',
+      claspType: 'Lobster Lock',
+      warranty: 'Lifetime Authenticity',
+    },
+    features: ['Substantial Weight', 'Never Kinks', 'Ideal for Heavy Pendants'],
+  },
+  {
+    id: 'prod-gift-01',
+    name: 'The Crown Jewel Solitaire & Studs Gift Hamper',
+    sku: 'TK-GFT-925-01',
+    category: 'Gift Sets',
+    collection: ['Luxury Gifting', 'Valentines Special', 'Bridal Collection'],
+    originalPrice: 7999,
+    sellingPrice: 5499,
+    discount: 31,
+    rating: 5.0,
+    reviewCount: 58,
+    images: [
+      'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'The ultimate presentation gift box. Contains a matching 92.5 sterling silver solitaire pendant with Italian chain, matching pair of 1-carat equivalent studs, and an adjustable solitaire ring in a royal velvet jewelry case with ribbon and personalized card.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 14.8,
+    sizes: ['Ring: Adjustable | Chain: 18 inch'],
+    inStock: true,
+    stockCount: 14,
+    isBestSeller: true,
+    isFeatured: true,
+    specifications: {
+      metal: '92.5 Sterling Silver',
+      hallmark: 'BIS 925 Hallmarking on every piece',
+      plating: 'Platinum Finish',
+      gemstone: 'Flawless CZ Crystals',
+      warranty: 'Lifetime Authenticity + Luxury Gift Packaging',
+    },
+    features: ['Complete 3-Piece Matching Ensemble', 'Plush Burgundy Velvet Gift Box', 'Certificate of Authenticity Card', 'Complimentary Personalized Message Card'],
+  },
+  {
+    id: 'prod-gift-02',
+    name: 'Bridal Heritage Jhumka & Choker Luxury Trousseau Set',
+    sku: 'TK-GFT-925-02',
+    category: 'Gift Sets',
+    collection: ['Bridal Collection', 'Festive Collection', 'Diwali Collection'],
+    originalPrice: 19999,
+    sellingPrice: 14999,
+    discount: 25,
+    rating: 5.0,
+    reviewCount: 23,
+    images: [
+      'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=1000&q=80',
+      'https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=1000&q=80',
+    ],
+    description: 'Crafted for royal Indian brides. Handcrafted Polki necklace and matching heavy peacock jhumkas in solid 92.5 silver with 24K antique gold dip.',
+    silverPurity: '92.5 Sterling Silver (BIS Hallmarked)',
+    weightGrams: 58.5,
+    sizes: ['Complete Bridal Set with Adjustable Ties'],
+    inStock: true,
+    stockCount: 6,
+    isFeatured: true,
+    specifications: {
+      metal: '92.5 Pure Sterling Silver',
+      hallmark: 'BIS 925 Laser Certificate',
+      plating: '24K Micron Gold Plated',
+      warranty: 'Lifetime Guarantee & Repolishing Service',
+    },
+    features: ['Grand Bridal Trousseau Keepsake', 'Solid Silver Weight', 'Wooden Lacquer Heirloom Chest'],
+  },
+];
+
+const INITIAL_CATEGORIES: CategoryInfo[] = [
+  {
+    id: 'cat-rings',
+    name: 'Rings',
+    slug: 'rings',
+    image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=600&q=80',
+    itemCount: 24,
+    tagline: 'Artisanal Solitaires, Bands & Royal Kundan Rings',
+  },
+  {
+    id: 'cat-earrings',
+    name: 'Earrings',
+    slug: 'earrings',
+    image: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=600&q=80',
+    itemCount: 32,
+    tagline: 'Heritage Jhumkas, Chandbalis & Daily Studs',
+  },
+  {
+    id: 'cat-necklaces',
+    name: 'Necklaces',
+    slug: 'necklaces',
+    image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?auto=format&fit=crop&w=600&q=80',
+    itemCount: 18,
+    tagline: 'Bridal Polki Chokers & Rivière Collars',
+  },
+  {
+    id: 'cat-bracelets',
+    name: 'Bracelets',
+    slug: 'bracelets',
+    image: 'https://images.unsplash.com/photo-1611591475152-473549298711?auto=format&fit=crop&w=600&q=80',
+    itemCount: 20,
+    tagline: 'Solid Nakshi Kadas & Sparkling Tennis Bangles',
+  },
+  {
+    id: 'cat-anklets',
+    name: 'Anklets',
+    slug: 'anklets',
+    image: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=600&q=80',
+    itemCount: 15,
+    tagline: 'Melodic Bridal Payals & Minimal Charms',
+  },
+  {
+    id: 'cat-pendants',
+    name: 'Pendants',
+    slug: 'pendants',
+    image: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=600&q=80',
+    itemCount: 28,
+    tagline: 'Auspicious Mandalas & Solitaire Drops with Free Chains',
+  },
+  {
+    id: 'cat-chains',
+    name: 'Chains',
+    slug: 'chains',
+    image: 'https://images.unsplash.com/photo-1611591475152-473549298711?auto=format&fit=crop&w=600&q=80',
+    itemCount: 16,
+    tagline: 'Italian Figaro, Box & Rope Link Silver Chains',
+  },
+  {
+    id: 'cat-giftsets',
+    name: 'Gift Sets',
+    slug: 'gift-sets',
+    image: 'https://images.unsplash.com/photo-1602751584552-8ba73aad10e1?auto=format&fit=crop&w=600&q=80',
+    itemCount: 12,
+    tagline: 'Curated 92.5 Silver Boxes in Royal Velvet Packaging',
+  },
+];
+
+const INITIAL_COUPONS: Coupon[] = [
+  {
+    code: 'TARA10',
+    discountType: 'percentage',
+    discountValue: 10,
+    minOrderAmount: 1999,
+    maxDiscount: 1000,
+    description: '10% instant discount on orders above ₹1,999 (Max ₹1,000)',
+    isActive: true,
+  },
+  {
+    code: 'FIRST925',
+    discountType: 'fixed',
+    discountValue: 500,
+    minOrderAmount: 2499,
+    description: 'Flat ₹500 off on your first pure silver order above ₹2,499',
+    isActive: true,
+  },
+  {
+    code: 'ROYAL20',
+    discountType: 'percentage',
+    discountValue: 20,
+    minOrderAmount: 4999,
+    maxDiscount: 2500,
+    description: 'Festive Royal discount 20% off on orders above ₹4,999',
+    isActive: true,
+  },
+  {
+    code: 'BRIDAL15',
+    discountType: 'percentage',
+    discountValue: 15,
+    minOrderAmount: 7999,
+    maxDiscount: 3000,
+    description: '15% off on bridal jewellery orders above ₹7,999',
+    isActive: true,
+  },
+];
+
+const INITIAL_USERS: User[] = [
+  {
+    id: 'user-admin-01',
+    name: 'Master Jeweller Admin',
+    email: 'admin@tarakanchan.com',
+    phone: '+91 99887 76655',
+    role: 'admin',
+    addresses: [
+      {
+        id: 'addr-admin-01',
+        fullName: 'TARAKANCHAN Headquarters',
+        phone: '+91 99887 76655',
+        addressLine1: 'Heritage Jewellers Row, Zaveri Bazaar',
+        city: 'Mumbai',
+        state: 'Maharashtra',
+        pincode: '400002',
+        addressType: 'Work',
+        isDefault: true,
+      },
+    ],
+    createdAt: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'user-demo-01',
+    name: 'Priya Sharma',
+    email: 'customer@tarakanchan.com',
+    phone: '+91 98765 43210',
+    role: 'customer',
+    addresses: [
+      {
+        id: 'addr-01',
+        fullName: 'Priya Sharma',
+        phone: '+91 98765 43210',
+        addressLine1: 'Flat 402, Royale Palms, Bandra West',
+        city: 'Mumbai',
+        state: 'Maharashtra',
+        pincode: '400050',
+        addressType: 'Home',
+        isDefault: true,
+      },
+      {
+        id: 'addr-02',
+        fullName: 'Priya Sharma',
+        phone: '+91 98765 43210',
+        addressLine1: 'Cyber Towers, Level 5, Viman Nagar',
+        city: 'Pune',
+        state: 'Maharashtra',
+        pincode: '411014',
+        addressType: 'Work',
+        isDefault: false,
+      },
+    ],
+    createdAt: '2026-02-15T12:00:00Z',
+  },
+];
+
+const INITIAL_ORDERS: Order[] = [
+  {
+    id: 'ord-101',
+    orderNumber: 'TK-2026-9041',
+    userId: 'user-demo-01',
+    customerName: 'Priya Sharma',
+    customerEmail: 'customer@tarakanchan.com',
+    customerPhone: '+91 98765 43210',
+    shippingAddress: INITIAL_USERS[1].addresses[0],
+    items: [
+      {
+        productId: 'prod-ring-01',
+        name: 'Regal Maharani Kundan 92.5 Silver Ring',
+        image: 'https://images.unsplash.com/photo-1605100804763-247f67b3557e?auto=format&fit=crop&w=400&q=80',
+        selectedSize: 'Size 14',
+        quantity: 1,
+        price: 3499,
+      },
+      {
+        productId: 'prod-pend-01',
+        name: 'Sacred Mandala Tree of Life Silver Pendant',
+        image: 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?auto=format&fit=crop&w=400&q=80',
+        selectedSize: 'Includes 18 inch Sterling Silver Chain',
+        quantity: 1,
+        price: 2499,
+      },
+    ],
+    subtotal: 5998,
+    discountAmount: 500,
+    deliveryCharges: 0,
+    taxAmount: 165,
+    totalAmount: 5663,
+    couponCode: 'FIRST925',
+    paymentMethod: 'Razorpay (Test Mode)',
+    paymentStatus: 'Paid',
+    paymentId: 'pay_test_TK9259041',
+    orderStatus: 'Dispatched',
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    trackingNumber: 'BLUDART-TK-889921',
+    courierPartner: 'BlueDart Luxury Secure Express',
+    estimatedDeliveryDate: 'Tomorrow by 2:00 PM',
+  },
+  {
+    id: 'ord-102',
+    orderNumber: 'TK-2026-8812',
+    userId: 'user-demo-01',
+    customerName: 'Priya Sharma',
+    customerEmail: 'customer@tarakanchan.com',
+    customerPhone: '+91 98765 43210',
+    shippingAddress: INITIAL_USERS[1].addresses[0],
+    items: [
+      {
+        productId: 'prod-earring-01',
+        name: 'Chandrika Peacock Silver Jhumkas',
+        image: 'https://images.unsplash.com/photo-1630019852942-f89202989a59?auto=format&fit=crop&w=400&q=80',
+        selectedSize: 'Standard Drop (48mm)',
+        quantity: 1,
+        price: 4299,
+      },
+    ],
+    subtotal: 4299,
+    discountAmount: 430,
+    deliveryCharges: 0,
+    taxAmount: 116,
+    totalAmount: 3985,
+    couponCode: 'TARA10',
+    paymentMethod: 'Razorpay (Test Mode)',
+    paymentStatus: 'Paid',
+    paymentId: 'pay_test_TK9258812',
+    orderStatus: 'Delivered',
+    createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
+    trackingNumber: 'BLUDART-TK-774412',
+    courierPartner: 'BlueDart Luxury Secure Express',
+    estimatedDeliveryDate: 'Delivered with Certificate',
+  },
+];
+
+const INITIAL_REVIEWS: Review[] = [
+  {
+    id: 'rev-01',
+    productId: 'prod-ring-01',
+    userName: 'Ananya Desai',
+    userEmail: 'ananya.d@gmail.com',
+    rating: 5,
+    title: 'Exceeded all expectations! Pure luxury.',
+    comment: 'The 925 BIS hallmark stamp is clearly visible and authentic. The finish is indistinguishable from solid gold polki jewelry. Packaging in the wine velvet box was magnificent.',
+    verifiedPurchase: true,
+    createdAt: '2026-02-10T14:30:00Z',
+    helpfulCount: 19,
+  },
+  {
+    id: 'rev-02',
+    productId: 'prod-earring-01',
+    userName: 'Meera Rajput',
+    userEmail: 'meera.r@outlook.com',
+    rating: 5,
+    title: 'Heirloom craftsmanship, lightweight on ears!',
+    comment: 'Wore these for my sister’s sangeet. The peacock carvings are so fine and delicate. People thought they were real vintage antique pieces passed down through generations.',
+    verifiedPurchase: true,
+    createdAt: '2026-02-18T10:15:00Z',
+    helpfulCount: 24,
+  },
+  {
+    id: 'rev-03',
+    productId: 'prod-neck-01',
+    userName: 'Radhika Singhania',
+    userEmail: 'radhika.s@gmail.com',
+    rating: 5,
+    title: 'Royal bridal grandeur without compromise',
+    comment: 'Solid weight, immaculate gold polish, and the green emerald stones have an ethereal depth. TARAKANCHAN is truly setting the international standard for sterling silver.',
+    verifiedPurchase: true,
+    createdAt: '2026-02-22T09:40:00Z',
+    helpfulCount: 31,
+  },
+  {
+    id: 'rev-04',
+    productId: 'prod-gift-01',
+    userName: 'Rohan Mehra',
+    userEmail: 'rohan.m@gmail.com',
+    rating: 5,
+    title: 'The perfect anniversary gift',
+    comment: 'My wife was genuinely astonished. The velvet presentation box, authenticity card, and the sparkle of the solitaire is breathtaking. 10/10 service and fast delivery.',
+    verifiedPurchase: true,
+    createdAt: '2026-02-25T18:00:00Z',
+    helpfulCount: 14,
+  },
+];
+
+const INITIAL_SETTINGS: StoreSettings = {
+  announcementText: '✨ Certified 92.5 Sterling Silver | Complimentary Velvet Gifting Box & Insured Shipping above ₹1,999 | Code: FIRST925 for ₹500 Off',
+  silverRateToday: '92.5 Pure Silver Rate: ₹98.50 / gm | BIS Hallmarked Guarantee',
+  freeShippingThreshold: 1999,
+  razorpayKeyId: 'rzp_test_TARAKANCHAN925',
+  razorpayTestMode: true,
+  contactEmail: 'concierge@tarakanchan.com',
+  contactPhone: '+91 (022) 2899-9250',
+  whatsappNumber: '+91 99887 76655',
+  showroomAddress: 'TARAKANCHAN Flagship Atelier, 14 Heritage Boulevard, Zaveri Bazaar, Mumbai 400002',
+};
+
+class Database {
+  private data: DatabaseSchema;
+
+  constructor() {
+    this.data = this.loadDatabase();
+  }
+
+  private loadDatabase(): DatabaseSchema {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+
+      if (fs.existsSync(DB_FILE)) {
+        const raw = fs.readFileSync(DB_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        // Ensure default users and products exist even if DB was older
+        return {
+          products: parsed.products?.length ? parsed.products : INITIAL_PRODUCTS,
+          categories: parsed.categories?.length ? parsed.categories : INITIAL_CATEGORIES,
+          coupons: parsed.coupons?.length ? parsed.coupons : INITIAL_COUPONS,
+          users: parsed.users?.length ? parsed.users : INITIAL_USERS,
+          orders: parsed.orders?.length ? parsed.orders : INITIAL_ORDERS,
+          reviews: parsed.reviews?.length ? parsed.reviews : INITIAL_REVIEWS,
+          carts: parsed.carts || {},
+          wishlists: parsed.wishlists || {},
+          newsletterSubscribers: parsed.newsletterSubscribers || [],
+          settings: parsed.settings || INITIAL_SETTINGS,
+        };
+      }
+    } catch (err) {
+      console.warn('Failed to read db file, initializing fresh database:', err);
+    }
+
+    const initial: DatabaseSchema = {
+      products: INITIAL_PRODUCTS,
+      categories: INITIAL_CATEGORIES,
+      coupons: INITIAL_COUPONS,
+      users: INITIAL_USERS,
+      orders: INITIAL_ORDERS,
+      reviews: INITIAL_REVIEWS,
+      carts: {
+        'user-demo-01': [
+          {
+            id: 'prod-ring-02-14',
+            productId: 'prod-ring-02',
+            product: INITIAL_PRODUCTS[1],
+            selectedSize: 'Size 14',
+            quantity: 1,
+          },
+        ],
+      },
+      wishlists: {
+        'user-demo-01': ['prod-neck-01', 'prod-brac-01'],
+      },
+      newsletterSubscribers: [
+        { email: 'vip@tarakanchan.com', subscribedAt: '2026-01-10T00:00:00Z', discountCode: 'FIRST925' },
+      ],
+      settings: INITIAL_SETTINGS,
+    };
+
+    this.persist(initial);
+    return initial;
+  }
+
+  private persist(dataToSave: DatabaseSchema = this.data) {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      fs.writeFileSync(DB_FILE, JSON.stringify(dataToSave, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Failed to write database file:', err);
+    }
+  }
+
+  // --- Products ---
+  getProducts(): Product[] {
+    return this.data.products;
+  }
+
+  getProductById(id: string): Product | undefined {
+    return this.data.products.find((p) => p.id === id || p.sku.toLowerCase() === id.toLowerCase());
+  }
+
+  createProduct(product: Omit<Product, 'id'>): Product {
+    const newProduct: Product = {
+      ...product,
+      id: `prod-${Date.now()}`,
+    };
+    this.data.products.unshift(newProduct);
+    this.persist();
+    return newProduct;
+  }
+
+  updateProduct(id: string, updates: Partial<Product>): Product | null {
+    const index = this.data.products.findIndex((p) => p.id === id);
+    if (index === -1) return null;
+    this.data.products[index] = { ...this.data.products[index], ...updates };
+    this.persist();
+    return this.data.products[index];
+  }
+
+  deleteProduct(id: string): boolean {
+    const initialLen = this.data.products.length;
+    this.data.products = this.data.products.filter((p) => p.id !== id);
+    if (this.data.products.length !== initialLen) {
+      this.persist();
+      return true;
+    }
+    return false;
+  }
+
+  // --- Categories ---
+  getCategories(): CategoryInfo[] {
+    return this.data.categories;
+  }
+
+  // --- Coupons ---
+  getCoupons(): Coupon[] {
+    return this.data.coupons;
+  }
+
+  saveCoupon(coupon: Coupon): Coupon {
+    const index = this.data.coupons.findIndex((c) => c.code.toUpperCase() === coupon.code.toUpperCase());
+    if (index >= 0) {
+      this.data.coupons[index] = coupon;
+    } else {
+      this.data.coupons.push(coupon);
+    }
+    this.persist();
+    return coupon;
+  }
+
+  // --- Users & Auth ---
+  getUsers(): User[] {
+    return this.data.users;
+  }
+
+  getUserByEmail(email: string): User | undefined {
+    return this.data.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  getUserById(id: string): User | undefined {
+    return this.data.users.find((u) => u.id === id);
+  }
+
+  createUser(user: Omit<User, 'id' | 'createdAt'>): User {
+    const newUser: User = {
+      ...user,
+      id: `user-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      addresses: user.addresses || [],
+    };
+    this.data.users.push(newUser);
+    this.persist();
+    return newUser;
+  }
+
+  updateUser(id: string, updates: Partial<User>): User | null {
+    const user = this.getUserById(id);
+    if (!user) return null;
+    Object.assign(user, updates);
+    this.persist();
+    return user;
+  }
+
+  // --- Orders ---
+  getOrders(userId?: string): Order[] {
+    if (userId) {
+      return this.data.orders.filter((o) => o.userId === userId || o.customerEmail.toLowerCase() === userId.toLowerCase());
+    }
+    return this.data.orders;
+  }
+
+  getOrderById(idOrOrderNum: string): Order | undefined {
+    return this.data.orders.find(
+      (o) => o.id === idOrOrderNum || o.orderNumber.toUpperCase() === idOrOrderNum.toUpperCase()
+    );
+  }
+
+  createOrder(order: Omit<Order, 'id' | 'orderNumber' | 'createdAt'>): Order {
+    const now = new Date();
+    const randomSeq = Math.floor(1000 + Math.random() * 9000);
+    const orderNumber = `TK-${now.getFullYear()}-${randomSeq}`;
+    const newOrder: Order = {
+      ...order,
+      id: `ord-${Date.now()}`,
+      orderNumber,
+      createdAt: now.toISOString(),
+      trackingNumber: `BLUDART-${orderNumber}`,
+      courierPartner: 'BlueDart Luxury Secure Express',
+      estimatedDeliveryDate: 'Delivery in 2-3 Business Days',
+    };
+    this.data.orders.unshift(newOrder);
+
+    // Update product stock counts
+    for (const item of order.items) {
+      const p = this.getProductById(item.productId);
+      if (p) {
+        p.stockCount = Math.max(0, p.stockCount - item.quantity);
+        if (p.stockCount === 0) p.inStock = false;
+      }
+    }
+
+    this.persist();
+    return newOrder;
+  }
+
+  updateOrderStatus(orderId: string, status: Order['orderStatus'], trackingNumber?: string): Order | null {
+    const order = this.data.orders.find((o) => o.id === orderId || o.orderNumber === orderId);
+    if (!order) return null;
+    order.orderStatus = status;
+    if (trackingNumber) order.trackingNumber = trackingNumber;
+    this.persist();
+    return order;
+  }
+
+  // --- Cart ---
+  getCart(sessionKey: string): any[] {
+    return this.data.carts[sessionKey] || [];
+  }
+
+  saveCart(sessionKey: string, items: any[]): any[] {
+    this.data.carts[sessionKey] = items;
+    this.persist();
+    return items;
+  }
+
+  // --- Wishlist ---
+  getWishlist(sessionKey: string): string[] {
+    return this.data.wishlists[sessionKey] || [];
+  }
+
+  toggleWishlist(sessionKey: string, productId: string): { wishlist: string[]; isWishlisted: boolean } {
+    let list = this.data.wishlists[sessionKey] || [];
+    const exists = list.includes(productId);
+    if (exists) {
+      list = list.filter((id) => id !== productId);
+    } else {
+      list.push(productId);
+    }
+    this.data.wishlists[sessionKey] = list;
+    this.persist();
+    return { wishlist: list, isWishlisted: !exists };
+  }
+
+  // --- Reviews ---
+  getReviews(productId?: string): Review[] {
+    if (productId) {
+      return this.data.reviews.filter((r) => r.productId === productId);
+    }
+    return this.data.reviews;
+  }
+
+  addReview(review: Omit<Review, 'id' | 'createdAt' | 'helpfulCount'>): Review {
+    const newReview: Review = {
+      ...review,
+      id: `rev-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      helpfulCount: 0,
+    };
+    this.data.reviews.unshift(newReview);
+
+    // recalculate product rating
+    const prodReviews = this.data.reviews.filter((r) => r.productId === review.productId);
+    const avg = prodReviews.reduce((sum, r) => sum + r.rating, 0) / prodReviews.length;
+    const prod = this.getProductById(review.productId);
+    if (prod) {
+      prod.rating = Number(avg.toFixed(1));
+      prod.reviewCount = prodReviews.length;
+    }
+
+    this.persist();
+    return newReview;
+  }
+
+  // --- Newsletter ---
+  addSubscriber(email: string): { success: boolean; discountCode: string; message: string } {
+    const existing = this.data.newsletterSubscribers.find((s) => s.email.toLowerCase() === email.toLowerCase());
+    if (existing) {
+      return { success: true, discountCode: 'FIRST925', message: 'You are already subscribed! Use code FIRST925 for ₹500 off.' };
+    }
+    this.data.newsletterSubscribers.push({
+      email,
+      subscribedAt: new Date().toISOString(),
+      discountCode: 'FIRST925',
+    });
+    this.persist();
+    return { success: true, discountCode: 'FIRST925', message: 'Welcome to TARAKANCHAN! Your ₹500 welcome coupon is FIRST925.' };
+  }
+
+  // --- Settings ---
+  getSettings(): StoreSettings {
+    return this.data.settings;
+  }
+
+  updateSettings(settings: Partial<StoreSettings>): StoreSettings {
+    this.data.settings = { ...this.data.settings, ...settings };
+    this.persist();
+    return this.data.settings;
+  }
+
+  // --- Admin Stats ---
+  getAdminStats() {
+    const totalRevenue = this.data.orders.reduce((acc, o) => acc + (o.paymentStatus === 'Paid' ? o.totalAmount : 0), 0);
+    const totalOrders = this.data.orders.length;
+    const totalCustomers = this.data.users.filter((u) => u.role === 'customer').length;
+    const totalProducts = this.data.products.length;
+    const lowStockProducts = this.data.products.filter((p) => p.stockCount <= 10);
+    const bestSellers = this.data.products.filter((p) => p.isBestSeller);
+
+    // Monthly sales grouping for charts
+    const salesChart = [
+      { month: 'Oct 2025', sales: 184500, orders: 38 },
+      { month: 'Nov 2025', sales: 245000, orders: 54 },
+      { month: 'Dec 2025', sales: 390000, orders: 82 },
+      { month: 'Jan 2026', sales: 298000, orders: 63 },
+      { month: 'Feb 2026', sales: 345000, orders: 74 },
+      { month: 'Mar 2026 (Live)', sales: totalRevenue + 120000, orders: totalOrders + 25 },
+    ];
+
+    return {
+      totalRevenue,
+      totalOrders,
+      totalCustomers,
+      totalProducts,
+      lowStockCount: lowStockProducts.length,
+      lowStockProducts,
+      bestSellers,
+      recentOrders: this.data.orders.slice(0, 8),
+      salesChart,
+      todaySilverRate: this.data.settings.silverRateToday,
+    };
+  }
+}
+
+export const db = new Database();
